@@ -1,0 +1,105 @@
+---
+title: "PracMachineLearning Assignment"
+author: "leighgoodenough"
+date: "23/05/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+This report outlines a method of exploring & fitting a model to accelerometer data on six subjects undertaking the Unilateral Dumbbell Biceps Curl exercise. The training data is divided into five groupings, with one group of exercises being performed correctly and the other four groupings representing incorrect methods of undertaking the exercise. Exploratory Data Analysis showed which of the 52 measurements taken were significantky variant between the five groupings. A random forests model was fitted to training data with approx. 95% accuracy. When this model was fitted to the test data, 20 out of 20 observations were predicted correctly.
+
+### Loading and Preprocessing Data
+
+The caret library in R will be accessed for this project. The training and testing files are sourced online and saved to the working directory.
+
+```{r }
+## Load required packages
+library(caret)
+
+## Download and read in the source files - training and testing
+trainURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(trainURL,destfile="training.csv")
+download.file(testURL,destfile="testing.csv")
+training <- read.csv("training.csv")
+test <- read.csv("testing.csv")
+```
+
+### Preprocessing data
+
+Early exploration of the data quickly identified that of 160 columns of data, only 60 contained data of any substance. Of these, 52 involved measurements that could be utilised for modelling. The final column in the training data illustrated the 'classe' factor for grouping the five different ways in which the exercise was performed. The final column of the testing data showed the problem id. Training and testing datasets were subset to the columns containing data. 
+
+```{r }
+## Subset dataframes to columns with data
+training <- training[,c(1:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+test <- test[,c(1:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+dim(training); dim(test)
+table(training$classe)
+```
+
+### Exploratory Data Analysis
+
+A boxplot was created for each of the 52 accelererometer measures, grouped by classe. This showed that many measurements were closely correlated across the five classe groupings. A smaller number of measurements showed significant variation, indicating that they would be more useful for model fitting than others. Some of the examples of boxplots showing variation are shown in the figure below.
+
+```{r }
+## template for EDA boxplot for each covariate
+qplot(classe,magnet_belt_y,data=training,fill=classe,geom=c("boxplot"))
+qplot(classe,magnet_arm_x,data=training,fill=classe,geom=c("boxplot"))
+qplot(classe,pitch_forearm,data=training,fill=classe,geom=c("boxplot"))
+```
+
+### Data splitting and further processing
+
+The training data set was split into two groupings, 70% for training the model and 30% to act as a probe dataset in preparation for applying the model to the test set.
+
+Based on the results of plotting each accelererometer variable, ten covariates were selected due to significant variation between classe groupings, and the training and probe sets were further subsetted to these columns of data.
+
+
+```{r }
+## Split train dataset into training and testing data
+set.seed(2020)
+inTrain <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+training <- training[inTrain,]
+testing <- training[-inTrain,]
+
+## Subset to columns with high variance (rel. low correlation) between classe factors
+training2 <- training[,c(19,31,32,33,34,44,45,48,54,58,60)]
+testing2 <- testing[,c(19,31,32,33,34,44,45,48,54,58,60)]
+```
+
+### Model fitting and testing on probe set
+
+A random forest model was fitted to the training data, using k-fold cross-validation. The random forest method was chosen due to its applicability to datasets with large numbers of variables. It was also noted that this was the method utilised by the creators of the datest to test the accuracy of their data.
+
+The model showed a 5% error rate upon analysis of the final model, and 100% accuracy when applied to the probe set.
+
+```{r }
+## Predict results for probe testing set within training data
+train.control <- trainControl(method = "cv", number = 5)
+fit2 <- train(classe~., data=training2, method="rf", trControl = train.control)
+fit2$finalModel
+pred3 <- predict(fit2,testing2)
+testing2$pred2Right <- pred3==testing2$classe
+table(pred3,testing2$classe)
+confusionMatrix(pred3,testing2$classe)
+```
+
+### Application of model to test data
+
+Finally the model was applied to the 20 test cases. This resulted in 20 correct predictions regarding which classe corresponded to each of the observations.
+
+```{r }
+## Predict results for test set
+pred4 <- predict(fit2,test)
+test$pred2Right <- pred4==test$problem_id
+table(pred4,test$problem_id)
+```
+
+### Reference
+
+Velloso, E et al 2013, Qualitative Activity Recognition of Weight Lifting Exercises, Proceedings of the 4th International Conference in Cooperation with SIGCHI, ACM SIGCHI, Stuttgart
